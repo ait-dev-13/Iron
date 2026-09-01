@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Iron Log — Workout Tracker</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1B1B1D">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Iron Log">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png" type="image/png">
+<style>
+  :root {
+    --bg: #1B1B1D;
+    --panel: #242426;
+    --panel-raised: #2C2C2F;
+    --line: #38383B;
+    --chalk: #EDEAE3;
+    --chalk-dim: #9C9A96;
+    --iron: #6B6B6E;
+    --plate-yellow: #F0B429;
+    --plate-yellow-dim: #8A6A1F;
+    --bar-red: #C1432A;
+    --radius: 10px;
+    font-size: 16px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--chalk);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    padding-bottom: 100px;
+    min-height: 100vh;
+  }
+
+  /* Type scale */
+  .mono {
+    font-family: 'SF Mono', 'Roboto Mono', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3 {
+    margin: 0;
+    font-family: 'Arial Narrow', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  /* Header */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: linear-gradient(180deg, rgba(27,27,29,1) 70%, rgba(27,27,29,0.96));
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+    padding: 18px 20px 14px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .brand h1 {
+    font-size: 1.5rem;
+    color: var(--chalk);
+  }
+
+  .brand h1 span {
+    color: var(--plate-yellow);
+  }
+
+  .brand .date-today {
+    font-size: 0.78rem;
+    color: var(--chalk-dim);
+    font-family: inherit;
+  }
+
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 20px 16px 0;
+  }
+
+  /* Stat strip */
+  .stat-strip {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+
+  .stat-plate {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 10px;
+    text-align: center;
+  }
+
+  .stat-plate .num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--plate-yellow);
+    line-height: 1;
+  }
+
+  .stat-plate .label {
+    font-size: 0.62rem;
+    color: var(--chalk-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 5px;
+  }
+
+  /* Primary action */
+  .btn-primary {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    background: var(--plate-yellow);
+    color: #1B1B1D;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    margin-bottom: 24px;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-full {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--chalk);
+    border: 1px solid var(--iron);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-ghost {
+    background: none;
+    border: none;
+    color: var(--chalk-dim);
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    padding: 4px;
+  }
+
+  .btn-danger { color: var(--bar-red); }
+
+  /* Section heading */
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .section-head h2 {
+    font-size: 0.85rem;
+    color: var(--chalk-dim);
+    letter-spacing: 0.1em;
+  }
+
+  /* Empty state */
+  .empty-state {
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--chalk-dim);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+
+  /* Workout card */
+  .workout-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .workout-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+
+  .workout-card-head .wdate {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .workout-card-head .wmeta {
+    font-size: 0.72rem;
+    color: var(--chalk-dim);
+    margin-top: 2px;
+  }
+
+  .plate-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid var(--plate-yellow-dim);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .plate-icon.filled {
+    border-color: var(--plate-yellow);
+    background: rgba(240,180,41,0.08);
+  }
+
+  .chevron {
+    transition: transform 0.2s ease;
+    color: var(--chalk-dim);
+  }
+  .workout-card.open .chevron { transform: rotate(180deg); }
+
+  .workout-card-body {
+    display: none;
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--line);
+  }
+  .workout-card.open .workout-card-body { display: block; padding-top: 12px; }
+
+  .exercise-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .exercise-row:last-child { border-bottom: none; }
+
+  .exercise-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .set-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .set-chip {
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 0.78rem;
+    color: var(--chalk);
+  }
+
+  .set-chip b { color: var(--plate-yellow); }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  /* Modal / entry screen */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 50;
+  }
+  .overlay.open { display: block; }
+
+  .sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    max-height: 92vh;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    z-index: 51;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+  }
+  .overlay.open .sheet { transform: translateY(0); }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sheet-head h2 {
+    font-size: 1.1rem;
+  }
+
+  .sheet-close {
+    background: none;
+    border: none;
+    color: var(--chalk-dim);
+    font-size: 1.4rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+
+  .sheet-body {
+    padding: 16px 18px 12px;
+    overflow-y: auto;
+  }
+
+  .sheet-footer {
+    padding: 12px 18px 18px;
+    border-top: 1px solid var(--line);
+  }
+
+  label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--chalk-dim);
+    margin-bottom: 6px;
+  }
+
+  input[type="text"], input[type="date"], input[type="number"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--chalk);
+    padding: 12px 12px;
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--plate-yellow);
+  }
+
+  .exercise-block {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .exercise-block-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .exercise-block-head input { margin-bottom: 0; flex: 1; }
+
+  .remove-x {
+    background: none;
+    border: none;
+    color: var(--chalk-dim);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 6px;
+  }
+
+  .set-row {
+    display: grid;
+    grid-template-columns: 24px 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .set-row .set-idx {
+    color: var(--chalk-dim);
+    font-size: 0.78rem;
+    text-align: center;
+  }
+
+  .set-row input {
+    margin-bottom: 0;
+    padding: 9px 10px;
+    font-size: 0.9rem;
+  }
+
+  .add-set-btn {
+    background: none;
+    border: 1px dashed var(--iron);
+    color: var(--chalk-dim);
+    border-radius: 8px;
+    padding: 8px;
+    width: 100%;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .add-exercise-btn {
+    width: 100%;
+    padding: 12px;
+    background: none;
+    border: 1px solid var(--plate-yellow-dim);
+    color: var(--plate-yellow);
+    border-radius: var(--radius);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+
+  /* Export sheet */
+  .export-text {
+    width: 100%;
+    min-height: 260px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--chalk);
+    padding: 12px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    resize: vertical;
+    margin-bottom: 14px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--plate-yellow);
+    color: #1B1B1D;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: all 0.25s ease;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  .backup-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .backup-row .btn-secondary { flex: 1; }
+
+  .backup-hint {
+    font-size: 0.72rem;
+    color: var(--chalk-dim);
+    line-height: 1.5;
+    margin: 10px 2px 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>IRON <span>LOG</span></h1>
+    <div class="date-today mono" id="todayLabel"></div>
+  </div>
+</header>
+
+<main>
+  <div class="stat-strip">
+    <div class="stat-plate">
+      <div class="num mono" id="statCount">0</div>
+      <div class="label">Workouts</div>
+    </div>
+    <div class="stat-plate">
+      <div class="num mono" id="statWeek">0</div>
+      <div class="label">This Week</div>
+    </div>
+    <div class="stat-plate">
+      <div class="num mono" id="statStreak">0</div>
+      <div class="label">Day Streak</div>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="openNewWorkout">+ Log Workout</button>
+  <button class="btn-secondary btn-full" id="openImportWod">↧ Import Workout of the Day</button>
+
+  <div class="section-head">
+    <h2>History</h2>
+    <button class="btn-ghost" id="openExport">Export summary</button>
+  </div>
+
+  <div id="historyList"></div>
+
+  <div class="backup-row">
+    <button class="btn-secondary" id="downloadBackupBtn">⬇ Download Backup</button>
+    <button class="btn-secondary" id="importBackupBtn">⬆ Import Backup</button>
+    <input type="file" id="importFileInput" accept="application/json" style="display:none;">
+  </div>
+  <p class="backup-hint">Download saves a .json file of your full history — drop it in your Google Drive folder to back it up. Import loads a previously downloaded file back in.</p>
+</main>
+
+<!-- New/Edit Workout Sheet -->
+<div class="overlay" id="workoutOverlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">Log Workout</h2>
+      <button class="sheet-close" id="closeWorkoutSheet">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <label for="workoutDate">Date</label>
+      <input type="date" id="workoutDate">
+
+      <div id="exerciseBlocks"></div>
+
+      <button class="add-exercise-btn" id="addExerciseBtn">+ Add Exercise</button>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn-primary" id="saveWorkoutBtn">Save Workout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export Sheet -->
+<div class="overlay" id="exportOverlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>Export Summary</h2>
+      <button class="sheet-close" id="closeExportSheet">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <label for="exportCount">Include last N workouts</label>
+      <input type="number" id="exportCount" value="5" min="1" max="50">
+      <label for="exportText">Formatted summary — copy this into your Mr Muscles project</label>
+      <textarea class="export-text mono" id="exportText" readonly></textarea>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn-primary" id="copyExportBtn">Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Workout of the Day Sheet -->
+<div class="overlay" id="importWodOverlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>Import Workout of the Day</h2>
+      <button class="sheet-close" id="closeImportWodSheet">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <label for="wodInput">Paste from Mr Muscles (plain text or JSON)</label>
+      <textarea class="export-text mono" id="wodInput" placeholder="Bench Press: 4x8 @135
+Squat: 3x10 @185
+Row: 3x12
+
+or paste JSON like:
+[{&quot;name&quot;:&quot;Bench Press&quot;,&quot;sets&quot;:4,&quot;reps&quot;:8,&quot;weight&quot;:135}]"></textarea>
+      <p class="backup-hint" id="wodFormatHint">Plain text format: one exercise per line — <span class="mono">Name: setsxreps @weight</span> (the @weight part is optional).</p>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn-primary" id="parseWodBtn">Load into Workout</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'ironlog_workouts_v1';
+  let workouts = [];
+  let editingWorkoutId = null;
+  let openWorkoutIds = new Set();
+
+  // ---------- Storage ----------
+  function loadWorkouts() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      workouts = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      workouts = [];
+    }
+  }
+
+  function saveWorkouts() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
+    } catch (e) {
+      showToast('Could not save — storage unavailable');
+    }
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  // ---------- Date helpers ----------
+  function todayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function formatDisplayDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function daysBetween(iso1, iso2) {
+    const [y1,m1,d1] = iso1.split('-').map(Number);
+    const [y2,m2,d2] = iso2.split('-').map(Number);
+    const a = Date.UTC(y1,m1-1,d1);
+    const b = Date.UTC(y2,m2-1,d2);
+    return Math.round((a - b) / 86400000);
+  }
+
+  // ---------- Stats ----------
+  function renderStats() {
+    document.getElementById('statCount').textContent = workouts.length;
+
+    const now = todayISO();
+    const weekCount = workouts.filter(w => Math.abs(daysBetween(now, w.date)) <= 6).length;
+    document.getElementById('statWeek').textContent = weekCount;
+
+    const dates = [...new Set(workouts.map(w => w.date))].sort().reverse();
+    let streak = 0;
+    if (dates.length) {
+      let cursor = dates.includes(now) ? now : null;
+      if (!cursor) {
+        const diff = daysBetween(now, dates[0]);
+        cursor = diff <= 1 ? dates[0] : null;
+      }
+      if (cursor) {
+        streak = 1;
+        let prevDate = cursor;
+        for (let i = 1; i < dates.length; i++) {
+          const diff = daysBetween(prevDate, dates[i]);
+          if (diff === 1) { streak++; prevDate = dates[i]; }
+          else if (diff === 0) { continue; }
+          else break;
+        }
+      }
+    }
+    document.getElementById('statStreak').textContent = streak;
+  }
+
+  // ---------- Render history ----------
+  function totalVolume(workout) {
+    let vol = 0;
+    workout.exercises.forEach(ex => {
+      ex.sets.forEach(s => { vol += (Number(s.weight) || 0) * (Number(s.reps) || 0); });
+    });
+    return vol;
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('historyList');
+    list.innerHTML = '';
+
+    if (workouts.length === 0) {
+      list.innerHTML = '<div class="empty-state">No workouts logged yet.<br>Tap "Log Workout" to add your first session.</div>';
+      return;
+    }
+
+    const sorted = [...workouts].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+
+    sorted.forEach(w => {
+      const card = document.createElement('div');
+      card.className = 'workout-card' + (openWorkoutIds.has(w.id) ? ' open' : '');
+      card.dataset.id = w.id;
+
+      const exCount = w.exercises.length;
+      const setCount = w.exercises.reduce((n, ex) => n + ex.sets.length, 0);
+      const vol = totalVolume(w);
+
+      card.innerHTML = `
+        <div class="workout-card-head">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="plate-icon filled"></div>
+            <div>
+              <div class="wdate">${formatDisplayDate(w.date)}</div>
+              <div class="wmeta">${exCount} exercise${exCount !== 1 ? 's' : ''} · ${setCount} set${setCount !== 1 ? 's' : ''} · ${vol.toLocaleString()} lb vol</div>
+            </div>
+          </div>
+          <div class="chevron">▾</div>
+        </div>
+        <div class="workout-card-body">
+          ${w.exercises.map(ex => `
+            <div class="exercise-row">
+              <div class="exercise-name">${escapeHtml(ex.name)}</div>
+              <div class="set-chips">
+                ${ex.sets.map((s, i) => `<span class="set-chip">${i+1}: <b>${s.weight || 0}</b>×${s.reps || 0}</span>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+          <div class="card-actions">
+            <button class="btn-secondary edit-workout" data-id="${w.id}">Edit</button>
+            <button class="btn-ghost btn-danger delete-workout" data-id="${w.id}">Delete</button>
+          </div>
+        </div>
+      `;
+
+      card.querySelector('.workout-card-head').addEventListener('click', () => {
+        if (openWorkoutIds.has(w.id)) openWorkoutIds.delete(w.id);
+        else openWorkoutIds.add(w.id);
+        renderHistory();
+      });
+
+      list.appendChild(card);
+    });
+
+    list.querySelectorAll('.edit-workout').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openWorkoutSheet(btn.dataset.id);
+      });
+    });
+
+    list.querySelectorAll('.delete-workout').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Delete this workout? This cannot be undone.')) {
+          workouts = workouts.filter(w => w.id !== btn.dataset.id);
+          saveWorkouts();
+          renderStats();
+          renderHistory();
+          showToast('Workout deleted');
+        }
+      });
+    });
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // ---------- Workout entry sheet ----------
+  const workoutOverlay = document.getElementById('workoutOverlay');
+  const exerciseBlocks = document.getElementById('exerciseBlocks');
+
+  function newSetRow(weight, reps, idx) {
+    const row = document.createElement('div');
+    row.className = 'set-row';
+    row.innerHTML = `
+      <div class="set-idx">${idx}</div>
+      <input type="number" class="mono set-weight" placeholder="Weight" value="${weight ?? ''}" inputmode="decimal">
+      <input type="number" class="mono set-reps" placeholder="Reps" value="${reps ?? ''}" inputmode="numeric">
+      <button class="remove-x remove-set" title="Remove set">&times;</button>
+    `;
+    row.querySelector('.remove-set').addEventListener('click', () => {
+      row.remove();
+      renumberSets(row.closest('.exercise-block'));
+    });
+    return row;
+  }
+
+  function renumberSets(block) {
+    block.querySelectorAll('.set-row').forEach((row, i) => {
+      row.querySelector('.set-idx').textContent = i + 1;
+    });
+  }
+
+  function newExerciseBlock(name, sets) {
+    const block = document.createElement('div');
+    block.className = 'exercise-block';
+    block.innerHTML = `
+      <div class="exercise-block-head">
+        <input type="text" class="exercise-name-input" placeholder="Exercise name (e.g. Bench Press)" value="${name ? escapeHtml(name) : ''}">
+        <button class="remove-x remove-exercise" title="Remove exercise">&times;</button>
+      </div>
+      <div class="sets-container"></div>
+      <button class="add-set-btn">+ Add Set</button>
+    `;
+
+    const setsContainer = block.querySelector('.sets-container');
+    const setsData = (sets && sets.length) ? sets : [{ weight: '', reps: '' }];
+    setsData.forEach((s, i) => setsContainer.appendChild(newSetRow(s.weight, s.reps, i + 1)));
+
+    block.querySelector('.add-set-btn').addEventListener('click', () => {
+      const count = setsContainer.querySelectorAll('.set-row').length;
+      setsContainer.appendChild(newSetRow('', '', count + 1));
+    });
+
+    block.querySelector('.remove-exercise').addEventListener('click', () => {
+      block.remove();
+    });
+
+    exerciseBlocks.appendChild(block);
+  }
+
+  function openWorkoutSheet(workoutId, prefillExercises) {
+    exerciseBlocks.innerHTML = '';
+    editingWorkoutId = workoutId || null;
+
+    if (workoutId) {
+      const w = workouts.find(x => x.id === workoutId);
+      document.getElementById('sheetTitle').textContent = 'Edit Workout';
+      document.getElementById('workoutDate').value = w.date;
+      w.exercises.forEach(ex => newExerciseBlock(ex.name, ex.sets));
+    } else if (prefillExercises && prefillExercises.length) {
+      document.getElementById('sheetTitle').textContent = 'Log Workout';
+      document.getElementById('workoutDate').value = todayISO();
+      prefillExercises.forEach(ex => newExerciseBlock(ex.name, ex.sets));
+    } else {
+      document.getElementById('sheetTitle').textContent = 'Log Workout';
+      document.getElementById('workoutDate').value = todayISO();
+      newExerciseBlock('', [{ weight: '', reps: '' }]);
+    }
+
+    workoutOverlay.classList.add('open');
+  }
+
+  function closeWorkoutSheet() {
+    workoutOverlay.classList.remove('open');
+  }
+
+  document.getElementById('openNewWorkout').addEventListener('click', () => openWorkoutSheet(null));
+  document.getElementById('closeWorkoutSheet').addEventListener('click', closeWorkoutSheet);
+  workoutOverlay.addEventListener('click', (e) => { if (e.target === workoutOverlay) closeWorkoutSheet(); });
+
+  document.getElementById('addExerciseBtn').addEventListener('click', () => {
+    newExerciseBlock('', [{ weight: '', reps: '' }]);
+  });
+
+  document.getElementById('saveWorkoutBtn').addEventListener('click', () => {
+    const date = document.getElementById('workoutDate').value;
+    if (!date) { showToast('Pick a date first'); return; }
+
+    const blocks = [...exerciseBlocks.querySelectorAll('.exercise-block')];
+    const exercises = [];
+
+    for (const block of blocks) {
+      const name = block.querySelector('.exercise-name-input').value.trim();
+      if (!name) continue;
+      const sets = [...block.querySelectorAll('.set-row')].map(row => ({
+        weight: row.querySelector('.set-weight').value,
+        reps: row.querySelector('.set-reps').value
+      })).filter(s => s.weight !== '' || s.reps !== '');
+
+      if (sets.length) exercises.push({ name, sets });
+    }
+
+    if (exercises.length === 0) {
+      showToast('Add at least one exercise with a set');
+      return;
+    }
+
+    if (editingWorkoutId) {
+      const w = workouts.find(x => x.id === editingWorkoutId);
+      w.date = date;
+      w.exercises = exercises;
+    } else {
+      workouts.push({ id: uid(), date, exercises, createdAt: Date.now() });
+      openWorkoutIds.clear();
+    }
+
+    saveWorkouts();
+    renderStats();
+    renderHistory();
+    closeWorkoutSheet();
+    showToast(editingWorkoutId ? 'Workout updated' : 'Workout saved');
+  });
+
+  // ---------- Export ----------
+  const exportOverlay = document.getElementById('exportOverlay');
+
+  function buildExportText() {
+    const n = Math.max(1, Number(document.getElementById('exportCount').value) || 5);
+    const sorted = [...workouts].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    const recent = sorted.slice(0, n).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (recent.length === 0) return 'No workouts logged yet.';
+
+    let out = `WORKOUT LOG — last ${recent.length} session${recent.length !== 1 ? 's' : ''}\n`;
+    out += '='.repeat(40) + '\n\n';
+
+    recent.forEach(w => {
+      out += `${formatDisplayDate(w.date)}\n`;
+      w.exercises.forEach(ex => {
+        const setsStr = ex.sets.map(s => `${s.weight || 0}x${s.reps || 0}`).join(', ');
+        out += `  - ${ex.name}: ${setsStr}\n`;
+      });
+      out += `  Volume: ${totalVolume(w).toLocaleString()} lb\n\n`;
+    });
+
+    return out.trim();
+  }
+
+  document.getElementById('openExport').addEventListener('click', () => {
+    document.getElementById('exportText').value = buildExportText();
+    exportOverlay.classList.add('open');
+  });
+
+  document.getElementById('closeExportSheet').addEventListener('click', () => {
+    exportOverlay.classList.remove('open');
+  });
+  exportOverlay.addEventListener('click', (e) => { if (e.target === exportOverlay) exportOverlay.classList.remove('open'); });
+
+  document.getElementById('exportCount').addEventListener('input', () => {
+    document.getElementById('exportText').value = buildExportText();
+  });
+
+  document.getElementById('copyExportBtn').addEventListener('click', async () => {
+    const text = document.getElementById('exportText').value;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied — paste into Mr Muscles');
+    } catch (e) {
+      const ta = document.getElementById('exportText');
+      ta.select();
+      document.execCommand('copy');
+      showToast('Copied — paste into Mr Muscles');
+    }
+  });
+
+  // ---------- Backup: download / import JSON ----------
+  document.getElementById('downloadBackupBtn').addEventListener('click', () => {
+    if (workouts.length === 0) {
+      showToast('Nothing to back up yet');
+      return;
+    }
+    const payload = {
+      app: 'iron-log',
+      exportedAt: new Date().toISOString(),
+      workouts: workouts
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = todayISO();
+    a.href = url;
+    a.download = `iron-log-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Backup downloaded');
+  });
+
+  const importFileInput = document.getElementById('importFileInput');
+  document.getElementById('importBackupBtn').addEventListener('click', () => {
+    importFileInput.value = '';
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(reader.result);
+      } catch (e) {
+        showToast('That file is not valid JSON');
+        return;
+      }
+
+      const incoming = Array.isArray(parsed) ? parsed : parsed.workouts;
+      if (!Array.isArray(incoming)) {
+        showToast('That file doesn\'t look like an Iron Log backup');
+        return;
+      }
+
+      const valid = incoming.every(w => w && typeof w.date === 'string' && Array.isArray(w.exercises));
+      if (!valid) {
+        showToast('That file doesn\'t look like an Iron Log backup');
+        return;
+      }
+
+      const mode = workouts.length > 0
+        ? confirm(`Import ${incoming.length} workout(s)?\n\nOK = Merge with existing history\nCancel = Replace existing history entirely`)
+        : true;
+
+      if (mode) {
+        // Merge: add any workout whose id isn't already present
+        const existingIds = new Set(workouts.map(w => w.id));
+        let added = 0;
+        incoming.forEach(w => {
+          if (!w.id) w.id = uid();
+          if (!existingIds.has(w.id)) {
+            workouts.push(w);
+            existingIds.add(w.id);
+            added++;
+          }
+        });
+        showToast(`Merged — added ${added} workout(s)`);
+      } else {
+        workouts = incoming.map(w => ({ ...w, id: w.id || uid() }));
+        showToast(`Replaced history with ${workouts.length} workout(s)`);
+      }
+
+      saveWorkouts();
+      renderStats();
+      renderHistory();
+    };
+    reader.readAsText(file);
+  });
+
+  // ---------- Import Workout of the Day ----------
+  const importWodOverlay = document.getElementById('importWodOverlay');
+
+  document.getElementById('openImportWod').addEventListener('click', () => {
+    document.getElementById('wodInput').value = '';
+    importWodOverlay.classList.add('open');
+  });
+  document.getElementById('closeImportWodSheet').addEventListener('click', () => {
+    importWodOverlay.classList.remove('open');
+  });
+  importWodOverlay.addEventListener('click', (e) => {
+    if (e.target === importWodOverlay) importWodOverlay.classList.remove('open');
+  });
+
+  function parseWodJson(raw) {
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+    const list = Array.isArray(parsed) ? parsed : parsed.exercises;
+    if (!Array.isArray(list)) return null;
+
+    const exercises = [];
+    for (const item of list) {
+      if (!item || !item.name) continue;
+      let sets = [];
+      if (Array.isArray(item.sets)) {
+        sets = item.sets.map(s => ({
+          weight: s.weight ?? s.load ?? '',
+          reps: s.reps ?? s.rep ?? s.repCount ?? ''
+        }));
+      } else {
+        const count = Number(item.sets) || 1;
+        const reps = item.reps ?? '';
+        const weight = item.weight ?? item.load ?? '';
+        for (let i = 0; i < count; i++) sets.push({ weight, reps });
+      }
+      if (sets.length) exercises.push({ name: String(item.name).trim(), sets });
+    }
+    return exercises.length ? exercises : null;
+  }
+
+  function parseWodText(raw) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const exercises = [];
+    // Name: SETSxREPS @WEIGHT   (name, colon/dash optional; @weight optional)
+    const re = /^(.+?)[:\-]?\s*(\d+)\s*[x×]\s*(\d+)(?:\s*@\s*([\d.]+)\s*(?:lb|lbs|kg)?)?\s*$/i;
+
+    for (const line of lines) {
+      const m = line.match(re);
+      if (!m) continue;
+      const name = m[1].trim();
+      const setCount = parseInt(m[2], 10);
+      const reps = parseInt(m[3], 10);
+      const weight = m[4] !== undefined ? m[4] : '';
+      if (!name || !setCount || !reps) continue;
+      const sets = [];
+      for (let i = 0; i < setCount; i++) sets.push({ weight, reps });
+      exercises.push({ name, sets });
+    }
+    return exercises.length ? exercises : null;
+  }
+
+  document.getElementById('parseWodBtn').addEventListener('click', () => {
+    const raw = document.getElementById('wodInput').value.trim();
+    if (!raw) { showToast('Paste a workout plan first'); return; }
+
+    let exercises = parseWodJson(raw);
+    if (!exercises) exercises = parseWodText(raw);
+
+    if (!exercises) {
+      showToast('Could not read that format — check the example');
+      return;
+    }
+
+    importWodOverlay.classList.remove('open');
+    openWorkoutSheet(null, exercises);
+    showToast(`Loaded ${exercises.length} exercise(s) — log actual results below`);
+  });
+
+  // ---------- Toast ----------
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ---------- PWA: register service worker ----------
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {
+        // Fails silently if opened as a plain file:// page — app still works.
+      });
+    });
+  }
+
+  // ---------- Init ----------
+  function init() {
+    document.getElementById('todayLabel').textContent = formatDisplayDate(todayISO());
+    loadWorkouts();
+    renderStats();
+    renderHistory();
+  }
+
+  init();
+})();
+</script>
+
+</body>
+</html>
