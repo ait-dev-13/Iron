@@ -24,6 +24,7 @@
     --plate-yellow: #F0B429;
     --plate-yellow-dim: #8A6A1F;
     --bar-red: #C1432A;
+    --go-green: #5CAA5C;
     --radius: 10px;
     font-size: 16px;
   }
@@ -151,6 +152,8 @@
     text-align: center;
     margin-bottom: 24px;
   }
+
+  .btn-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -423,6 +426,41 @@
     font-size: 0.9rem;
   }
 
+  .set-row input.suggested {
+    color: var(--chalk-dim);
+    border-style: dashed;
+  }
+
+  .set-row input.confirmed {
+    color: var(--go-green);
+    border-color: var(--go-green);
+  }
+
+  .autosave-indicator {
+    font-size: 0.65rem;
+    color: var(--chalk-dim);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    margin-top: 2px;
+    min-height: 14px;
+  }
+  .autosave-indicator.active { color: var(--go-green); }
+
+  .draft-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(240,180,41,0.08);
+    border: 1px solid var(--plate-yellow-dim);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 0.78rem;
+    color: var(--chalk-dim);
+  }
+
   .add-set-btn {
     background: none;
     border: 1px dashed var(--iron);
@@ -529,6 +567,11 @@
     </div>
   </div>
 
+  <div class="draft-banner" id="draftBanner" style="display:none;">
+    <span>You have an unsaved workout in progress.</span>
+    <button class="btn-ghost" id="resumeDraftBtn" style="margin:0; color: var(--plate-yellow);">Resume →</button>
+  </div>
+
   <button class="btn-primary" id="openNewWorkout">+ Log Workout</button>
   <button class="btn-secondary btn-full" id="openImportWod">↧ Import Workout of the Day</button>
 
@@ -551,7 +594,10 @@
 <div class="overlay" id="workoutOverlay">
   <div class="sheet">
     <div class="sheet-head">
-      <h2 id="sheetTitle">Log Workout</h2>
+      <div>
+        <h2 id="sheetTitle">Log Workout</h2>
+        <div class="autosave-indicator" id="autosaveIndicator"></div>
+      </div>
       <button class="sheet-close" id="closeWorkoutSheet">&times;</button>
     </div>
     <div class="sheet-body">
@@ -786,19 +832,39 @@ or paste JSON like:
   // ---------- Workout entry sheet ----------
   const workoutOverlay = document.getElementById('workoutOverlay');
   const exerciseBlocks = document.getElementById('exerciseBlocks');
+  const DRAFT_KEY = 'ironlog_draft_v1';
 
-  function newSetRow(weight, reps, idx) {
+  // weightSuggested/repsSuggested = true when the value came from a Workout
+  // of the Day import and hasn't been touched yet (renders grey). Editing a
+  // suggested field promotes it to "confirmed" (renders green).
+  function newSetRow(weight, reps, idx, weightSuggested, repsSuggested) {
     const row = document.createElement('div');
     row.className = 'set-row';
+    const wClass = weightSuggested ? 'suggested' : '';
+    const rClass = repsSuggested ? 'suggested' : '';
     row.innerHTML = `
       <div class="set-idx">${idx}</div>
-      <input type="number" class="mono set-weight" placeholder="Weight" value="${weight ?? ''}" inputmode="decimal">
-      <input type="number" class="mono set-reps" placeholder="Reps" value="${reps ?? ''}" inputmode="numeric">
+      <input type="number" class="mono set-weight ${wClass}" placeholder="Weight" value="${weight ?? ''}" inputmode="decimal">
+      <input type="number" class="mono set-reps ${rClass}" placeholder="Reps" value="${reps ?? ''}" inputmode="numeric">
       <button class="remove-x remove-set" title="Remove set">&times;</button>
     `;
+
+    const weightInput = row.querySelector('.set-weight');
+    const repsInput = row.querySelector('.set-reps');
+    [weightInput, repsInput].forEach(inp => {
+      inp.addEventListener('input', () => {
+        if (inp.classList.contains('suggested')) {
+          inp.classList.remove('suggested');
+          inp.classList.add('confirmed');
+        }
+        scheduleDraftSave();
+      });
+    });
+
     row.querySelector('.remove-set').addEventListener('click', () => {
       row.remove();
       renumberSets(row.closest('.exercise-block'));
+      scheduleDraftSave();
     });
     return row;
   }
@@ -823,23 +889,88 @@ or paste JSON like:
 
     const setsContainer = block.querySelector('.sets-container');
     const setsData = (sets && sets.length) ? sets : [{ weight: '', reps: '' }];
-    setsData.forEach((s, i) => setsContainer.appendChild(newSetRow(s.weight, s.reps, i + 1)));
+    setsData.forEach((s, i) => setsContainer.appendChild(
+      newSetRow(s.weight, s.reps, i + 1, !!s.weightSuggested, !!s.repsSuggested)
+    ));
+
+    block.querySelector('.exercise-name-input').addEventListener('input', scheduleDraftSave);
 
     block.querySelector('.add-set-btn').addEventListener('click', () => {
       const count = setsContainer.querySelectorAll('.set-row').length;
-      setsContainer.appendChild(newSetRow('', '', count + 1));
+      setsContainer.appendChild(newSetRow('', '', count + 1, false, false));
+      scheduleDraftSave();
     });
 
     block.querySelector('.remove-exercise').addEventListener('click', () => {
       block.remove();
+      scheduleDraftSave();
     });
 
     exerciseBlocks.appendChild(block);
   }
 
+  // Reads the form exactly as typed (including blank/incomplete rows) so a
+  // draft can be restored pixel-for-pixel. Suggested/confirmed state is
+  // preserved via each input's current class.
+  function serializeFormRaw() {
+    const date = document.getElementById('workoutDate').value;
+    const blocks = [...exerciseBlocks.querySelectorAll('.exercise-block')];
+    const exercises = blocks.map(block => {
+      const name = block.querySelector('.exercise-name-input').value;
+      const sets = [...block.querySelectorAll('.set-row')].map(row => {
+        const wInput = row.querySelector('.set-weight');
+        const rInput = row.querySelector('.set-reps');
+        return {
+          weight: wInput.value,
+          reps: rInput.value,
+          weightSuggested: wInput.classList.contains('suggested'),
+          repsSuggested: rInput.classList.contains('suggested')
+        };
+      });
+      return { name, sets };
+    });
+    return { date, exercises };
+  }
+
+  // ---------- Autosave draft (new workouts only, not edits) ----------
+  let draftTimer = null;
+  function scheduleDraftSave() {
+    if (editingWorkoutId) return; // don't silently mutate saved history
+    clearTimeout(draftTimer);
+    const indicator = document.getElementById('autosaveIndicator');
+    if (indicator) { indicator.textContent = 'Saving…'; indicator.classList.remove('active'); }
+    draftTimer = setTimeout(() => {
+      try {
+        const form = serializeFormRaw();
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...form, savedAt: Date.now() }));
+        if (indicator) {
+          indicator.textContent = 'Autosaved just now';
+          indicator.classList.add('active');
+        }
+      } catch (e) {
+        if (indicator) indicator.textContent = '';
+      }
+    }, 400);
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+
+  function loadDraft() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function openWorkoutSheet(workoutId, prefillExercises) {
     exerciseBlocks.innerHTML = '';
     editingWorkoutId = workoutId || null;
+    const indicator = document.getElementById('autosaveIndicator');
+    if (indicator) { indicator.textContent = ''; indicator.classList.remove('active'); }
 
     if (workoutId) {
       const w = workouts.find(x => x.id === workoutId);
@@ -850,6 +981,7 @@ or paste JSON like:
       document.getElementById('sheetTitle').textContent = 'Log Workout';
       document.getElementById('workoutDate').value = todayISO();
       prefillExercises.forEach(ex => newExerciseBlock(ex.name, ex.sets));
+      scheduleDraftSave();
     } else {
       document.getElementById('sheetTitle').textContent = 'Log Workout';
       document.getElementById('workoutDate').value = todayISO();
@@ -861,14 +993,30 @@ or paste JSON like:
 
   function closeWorkoutSheet() {
     workoutOverlay.classList.remove('open');
+    refreshDraftBanner();
   }
 
-  document.getElementById('openNewWorkout').addEventListener('click', () => openWorkoutSheet(null));
+  document.getElementById('openNewWorkout').addEventListener('click', () => {
+    const draft = loadDraft();
+    if (draftHasContent(draft)) {
+      const resume = confirm('You have an unsaved workout in progress. Resume it?\n\nOK = Resume draft\nCancel = Start a new blank workout');
+      if (resume) {
+        resumeDraftIntoSheet(draft);
+        return;
+      } else {
+        clearDraft();
+        refreshDraftBanner();
+      }
+    }
+    openWorkoutSheet(null);
+  });
+  document.getElementById('workoutDate').addEventListener('input', scheduleDraftSave);
   document.getElementById('closeWorkoutSheet').addEventListener('click', closeWorkoutSheet);
   workoutOverlay.addEventListener('click', (e) => { if (e.target === workoutOverlay) closeWorkoutSheet(); });
 
   document.getElementById('addExerciseBtn').addEventListener('click', () => {
     newExerciseBlock('', [{ weight: '', reps: '' }]);
+    scheduleDraftSave();
   });
 
   document.getElementById('saveWorkoutBtn').addEventListener('click', () => {
@@ -901,6 +1049,7 @@ or paste JSON like:
     } else {
       workouts.push({ id: uid(), date, exercises, createdAt: Date.now() });
       openWorkoutIds.clear();
+      clearDraft();
     }
 
     saveWorkouts();
@@ -1076,15 +1225,18 @@ or paste JSON like:
       if (!item || !item.name) continue;
       let sets = [];
       if (Array.isArray(item.sets)) {
-        sets = item.sets.map(s => ({
-          weight: s.weight ?? s.load ?? '',
-          reps: s.reps ?? s.rep ?? s.repCount ?? ''
-        }));
+        sets = item.sets.map(s => {
+          const weight = s.weight ?? s.load ?? '';
+          const reps = s.reps ?? s.rep ?? s.repCount ?? '';
+          return { weight, reps, weightSuggested: weight !== '', repsSuggested: reps !== '' };
+        });
       } else {
         const count = Number(item.sets) || 1;
         const reps = item.reps ?? '';
         const weight = item.weight ?? item.load ?? '';
-        for (let i = 0; i < count; i++) sets.push({ weight, reps });
+        for (let i = 0; i < count; i++) {
+          sets.push({ weight, reps, weightSuggested: weight !== '', repsSuggested: reps !== '' });
+        }
       }
       if (sets.length) exercises.push({ name: String(item.name).trim(), sets });
     }
@@ -1106,7 +1258,9 @@ or paste JSON like:
       const weight = m[4] !== undefined ? m[4] : '';
       if (!name || !setCount || !reps) continue;
       const sets = [];
-      for (let i = 0; i < setCount; i++) sets.push({ weight, reps });
+      for (let i = 0; i < setCount; i++) {
+        sets.push({ weight, reps, weightSuggested: weight !== '', repsSuggested: true });
+      }
       exercises.push({ name, sets });
     }
     return exercises.length ? exercises : null;
@@ -1148,12 +1302,41 @@ or paste JSON like:
     });
   }
 
+  // ---------- Draft banner on home screen ----------
+  function draftHasContent(draft) {
+    return draft && (draft.exercises || []).some(ex => ex.name || (ex.sets || []).some(s => s.weight || s.reps));
+  }
+
+  function refreshDraftBanner() {
+    const banner = document.getElementById('draftBanner');
+    const draft = loadDraft();
+    banner.style.display = draftHasContent(draft) ? 'flex' : 'none';
+  }
+
+  function resumeDraftIntoSheet(draft) {
+    exerciseBlocks.innerHTML = '';
+    editingWorkoutId = null;
+    document.getElementById('sheetTitle').textContent = 'Log Workout';
+    document.getElementById('workoutDate').value = draft.date || todayISO();
+    (draft.exercises.length ? draft.exercises : [{ name: '', sets: [{ weight: '', reps: '' }] }])
+      .forEach(ex => newExerciseBlock(ex.name, ex.sets));
+    workoutOverlay.classList.add('open');
+    const indicator = document.getElementById('autosaveIndicator');
+    if (indicator) { indicator.textContent = 'Draft resumed'; indicator.classList.add('active'); }
+  }
+
+  document.getElementById('resumeDraftBtn').addEventListener('click', () => {
+    const draft = loadDraft();
+    if (draftHasContent(draft)) resumeDraftIntoSheet(draft);
+  });
+
   // ---------- Init ----------
   function init() {
     document.getElementById('todayLabel').textContent = formatDisplayDate(todayISO());
     loadWorkouts();
     renderStats();
     renderHistory();
+    refreshDraftBanner();
   }
 
   init();
