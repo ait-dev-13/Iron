@@ -98,6 +98,51 @@
   }
 
   /* Stat strip */
+  .greeting-banner {
+    margin-bottom: 20px;
+  }
+
+  .greeting-text {
+    font-size: 1.15rem;
+    color: var(--chalk);
+    margin-bottom: 10px;
+  }
+
+  .quote-block {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--plate-yellow);
+    border-radius: var(--radius);
+    padding: 14px 16px 14px 20px;
+  }
+
+  .quote-mark {
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    font-family: Georgia, serif;
+    font-size: 2.2rem;
+    color: var(--plate-yellow-dim);
+    line-height: 1;
+  }
+
+  .quote-text {
+    margin: 0;
+    font-size: 0.88rem;
+    font-style: italic;
+    color: var(--chalk);
+    line-height: 1.5;
+  }
+
+  .quote-author {
+    margin: 8px 0 0;
+    font-size: 0.72rem;
+    color: var(--chalk-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
   .stat-strip {
     display: flex;
     gap: 10px;
@@ -552,6 +597,15 @@
 </header>
 
 <main>
+  <div class="greeting-banner">
+    <h2 class="greeting-text">Hello Tim!</h2>
+    <div class="quote-block">
+      <span class="quote-mark">"</span>
+      <p class="quote-text" id="quoteText"></p>
+      <p class="quote-author" id="quoteAuthor"></p>
+    </div>
+  </div>
+
   <div class="stat-strip">
     <div class="stat-plate">
       <div class="num mono" id="statCount">0</div>
@@ -685,6 +739,48 @@ or paste JSON like:
 
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  // ---------- Motivational quotes ----------
+  const MOTIVATIONAL_QUOTES = [
+    { text: "The pain you feel today will be the strength you feel tomorrow.", author: "Unknown" },
+    { text: "Success isn't always about greatness. It's about consistency.", author: "Dwayne Johnson" },
+    { text: "The only bad workout is the one that didn't happen.", author: "Unknown" },
+    { text: "Strength does not come from winning. Your struggles develop your strengths.", author: "Arnold Schwarzenegger" },
+    { text: "It's not about having time, it's about making time.", author: "Unknown" },
+    { text: "The body achieves what the mind believes.", author: "Unknown" },
+    { text: "Don't limit your challenges, challenge your limits.", author: "Unknown" },
+    { text: "You don't have to be great to start, but you have to start to be great.", author: "Zig Ziglar" },
+    { text: "Take care of your body. It's the only place you have to live.", author: "Jim Rohn" },
+    { text: "The difference between try and triumph is a little umph.", author: "Unknown" },
+    { text: "A one-hour workout is 4% of your day. No excuses.", author: "Unknown" },
+    { text: "Motivation is what gets you started. Habit is what keeps you going.", author: "Jim Ryun" },
+    { text: "The only way to define your limits is by going beyond them.", author: "Arthur C. Clarke" },
+    { text: "Champions keep playing until they get it right.", author: "Billie Jean King" },
+    { text: "It never gets easier, you just get stronger.", author: "Unknown" },
+    { text: "Push yourself because no one else is going to do it for you.", author: "Unknown" },
+    { text: "Wake up with determination, go to bed with satisfaction.", author: "Unknown" },
+    { text: "Fall in love with the process, and the results will come.", author: "Eric Thomas" },
+    { text: "You are only one workout away from a good mood.", author: "Unknown" },
+    { text: "Nothing works unless you do.", author: "Maya Angelou" },
+    { text: "Small steps every day add up to big change.", author: "Unknown" },
+    { text: "The clock is ticking — are you becoming who you want to be?", author: "Greg Plitt" },
+    { text: "Your body can stand almost anything. It's your mind you have to convince.", author: "Unknown" },
+    { text: "Discipline is the bridge between goals and accomplishment.", author: "Jim Rohn" },
+    { text: "Every workout is progress, no matter how small it feels.", author: "Unknown" }
+  ];
+
+  function dayOfYear(d) {
+    const start = new Date(d.getFullYear(), 0, 0);
+    const diff = d - start;
+    return Math.floor(diff / 86400000);
+  }
+
+  function renderQuote() {
+    const idx = dayOfYear(new Date()) % MOTIVATIONAL_QUOTES.length;
+    const q = MOTIVATIONAL_QUOTES[idx];
+    document.getElementById('quoteText').textContent = q.text;
+    document.getElementById('quoteAuthor').textContent = '— ' + q.author;
   }
 
   // ---------- Date helpers ----------
@@ -1333,6 +1429,7 @@ or paste JSON like:
   // ---------- Init ----------
   function init() {
     document.getElementById('todayLabel').textContent = formatDisplayDate(todayISO());
+    renderQuote();
     loadWorkouts();
     renderStats();
     renderHistory();
